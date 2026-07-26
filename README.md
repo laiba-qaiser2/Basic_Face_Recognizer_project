@@ -23,7 +23,7 @@ How to Run the Project
 python face_recognizer.py
 1.Your webcam will turn on, and a window will pop up showing the live video feed with face tracking.
 2.To close the program, simply click on the video window and press the 'q' key on your keyboard.
-
+```
 ##Acknowledgements
 
 
