@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Chatbot with History & Memory</title>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#007bff">
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; display: flex; height: 100vh; margin: 0; font-size: 16px; }
+        
+        .sidebar { width: 260px; background: #202123; color: white; display: flex; flex-direction: column; padding: 15px; justify-content: space-between; }
+        .new-chat-btn { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: white; padding: 12px; border-radius: 6px; cursor: pointer; text-align: left; font-size: 16px; margin-bottom: 20px; font-weight: bold; width: 100%; }
+        .logout-btn { background: #dc3545; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; text-align: center; text-decoration: none; font-weight: bold; display: block; font-size: 16px; width: 100%; }
+        .history-title { font-size: 13px; color: #8e8ea0; margin-bottom: 10px; text-transform: uppercase; font-weight: bold; }
+        .history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+        .history-item { padding: 10px; border-radius: 5px; font-size: 15px; color: #ececf1; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .main-container { flex: 1; display: flex; flex-direction: column; background: #ffffff; height: 100vh; }
+        .chat-header { background: #007bff; color: white; padding: 15px; text-align: center; font-size: 1.2rem; font-weight: bold; }
+        .chat-box { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; background: #fafafa; }
+        .message { padding: 14px 18px; border-radius: 15px; max-width: 85%; word-wrap: break-word; line-height: 1.5; font-size: 16px; }
+        .user-msg { background: #007bff; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .bot-msg { background: #e0e0e0; color: black; align-self: flex-start; border-bottom-left-radius: 2px; }
+        
+        .typing-dots { display: flex; gap: 4px; align-items: center; padding: 5px 0; }
+        .typing-dots span { width: 8px; height: 8px; background: #888; border-radius: 50%; animation: blink 1.4s infinite both; }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+
+        .input-area { display: flex; padding: 15px; border-top: 1px solid #ddd; background: white; }
+        input[type="text"] { flex: 1; padding: 14px 18px; border: 1px solid #ccc; border-radius: 25px; outline: none; font-size: 16px; }
+        button.send-btn { background: #007bff; color: white; border: none; padding: 0 22px; margin-left: 10px; border-radius: 25px; cursor: pointer; font-weight: bold; font-size: 16px; }
+
+        /* Mobile Responsive Sidebar Fix */
+        @media screen and (max-width: 768px) {
+            body { flex-direction: row; position: relative; }
+            .sidebar { position: absolute; left: -260px; top: 0; height: 100%; z-index: 1000; transition: 0.3s ease; width: 240px; }
+            .sidebar.active { left: 0; }
+            .main-container { width: 100%; height: 100vh; }
+            .mobile-menu-btn { display: block; position: absolute; left: 15px; top: 12px; background: none; border: none; color: white; font-size: 24px; z-index: 1001; cursor: pointer; }
+            .history-list, .history-title { display: flex; } /* Mobile par ab recent searches show hongi */
+        }
+        .mobile-menu-btn { display: none; }
+    </style>
+</head>
+<body>
+
+<button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+
+<div class="sidebar" id="sidebar">
+    <div>
+        <button class="new-chat-btn" onclick="startNewChat()">➕ New Chat</button>
+        <div class="history-title">Recent Searches</div>
+        <div class="history-list" id="history-list"></div>
+    </div>
+    <a href="/logout" class="logout-btn">Logout</a>
+</div>
+
+<div class="main-container">
+    <div class="chat-header">🤖 AI Assistant</div>
+    <div class="chat-box" id="chat-box">
+        <div class="message bot-msg">Hello! I am your AI assistant. How can I help you today?</div>
+    </div>
+    <div class="input-area">
+        <input type="text" id="user-input" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
+        <button class="send-btn" onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<script>
+    function toggleSidebar() {
+        document.getElementById("sidebar").classList.toggle("active");
+    }
+
+    async function sendMessage() {
+        const inputField = document.getElementById("user-input");
+        const message = inputField.value.trim();
+        if (!message) return;
+
+        appendMessage("You", message, "user-msg");
+        addRecentSearch(message);
+        inputField.value = "";
+
+        const typingId = appendLoadingIndicator();
+
+        try {
+            const response = href = await fetch("/get_response", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: message })
+            });
+            const data = await response.json();
+            
+            removeLoadingIndicator(typingId);
+            
+            if (response.status === 401 || data.error === "Unauthorized") {
+                window.location.href = "/login";
+                return;
+            }
+
+            if (data.response) {
+                appendMessage("Bot", data.response, "bot-msg");
+            } else {
+                appendMessage("Bot", "Error: Something went wrong.", "bot-msg");
+            }
+        } catch (error) {
+            removeLoadingIndicator(typingId);
+            appendMessage("Bot", "Error connecting to server.", "bot-msg");
+        }
+    }
+
+    function appendMessage(sender, text, className) {
+        const chatBox = document.getElementById("chat-box");
+        const msgDiv = document.createElement("div");
+        msgDiv.className = `message ${className}`;
+        msgDiv.innerText = text;
+        chatBox.appendChild(msgDiv);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function addRecentSearch(text) {
+        const historyList = document.getElementById("history-list");
+        const historyItem = document.createElement("div");
+        historyItem.className = "history-item";
+        historyItem.innerText = text;
+        historyItem.onclick = function() {
+            document.getElementById("user-input").value = text;
+            sendMessage();
+            toggleSidebar();
+        };
+        historyList.prepend(historyItem);
+    }
+
+    async function startNewChat() {
+        try {
+            await fetch("/new_chat", { method: "POST" });
+            document.getElementById("chat-box").innerHTML = `<div class="message bot-msg">New chat started! What would you like to discuss?</div>`;
+            toggleSidebar();
+        } catch (error) {
+            console.log("Error starting new chat");
+        }
+    }
+
+    function appendLoadingIndicator() {
+        const chatBox = document.getElementById("chat-box");
+        const msgDiv = document.createElement("div");
+        msgDiv.className = "message bot-msg";
+        msgDiv.id = "loading-typing";
+        msgDiv.innerHTML = `<div class="typing-dots"><span></span><span></span><span></span></div>`;
+        chatBox.appendChild(msgDiv);
+        chatBox.scrollTop = chatBox.scrollHeight;
+        return "loading-typing";
+    }
+
+    function removeLoadingIndicator(id) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    }
+
+    function handleKeyPress(event) {
+        if (event.key === "Enter") sendMessage();
+    }
+</script>
+
+</body>
+</html>

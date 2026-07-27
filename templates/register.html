@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - AI Chatbot</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f7f6; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 300px; }
+        h2 { text-align: center; color: #333; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 16px; background-color: #fff; color: #000; }
+        button { width: 100%; background: #28a745; color: white; border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px; }
+        button:hover { background: #218838; }
+        .msg { text-align: center; font-size: 14px; margin-top: 10px; }
+        .link { text-align: center; margin-top: 15px; font-size: 15px; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h2>Register</h2>
+    <input type="email" id="email" placeholder="Enter Email" autocomplete="off">
+    <input type="password" id="password" placeholder="Create Password" autocomplete="off">
+    <button type="button" onclick="registerUser()">Register</button>
+    <p class="msg" id="success-msg"></p>
+    <div class="link">Already have an account? <a href="/login">Login here</a></div>
+</div>
+
+<script>
+    async function registerUser() {
+        const emailInput = document.getElementById("email").value.trim();
+        const passwordInput = document.getElementById("password").value.trim();
+        const msgBox = document.getElementById("success-msg");
+
+        if (!emailInput || !passwordInput) {
+            msgBox.style.color = "red";
+            msgBox.innerText = "Please fill in all fields.";
+            return;
+        }
+
+        msgBox.style.color = "blue";
+        msgBox.innerText = "Processing...";
+
+        try {
+            const res = await fetch("/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: emailInput, password: passwordInput })
+            });
+            const data = await res.json();
+            
+            if (data.status === "success") {
+                msgBox.style.color = "green";
+                msgBox.innerText = data.message;
+                setTimeout(() => {
+                    window.location.href = "/";
+                }, 1000);
+            } else {
+                msgBox.style.color = "red";
+                msgBox.innerText = data.message;
+            }
+        } catch (error) {
+            msgBox.style.color = "red";
+            msgBox.innerText = "Server connection error.";
+        }
+    }
+</script>
+</body>
+</html>
